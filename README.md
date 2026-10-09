@@ -212,7 +212,7 @@ README is the map. Code is next. First milestone: v0.1 with working process comm
 | Burst | Fast C++ tokenizer |
 | Resonance | LLM query router |
 | Overdrive | Process analyzer |
-| ARK | AI safety verification |
+| ARK | AI Safety Research |
 
 Flow: Chaos-Control -> Burst -> Resonance -> Overdrive -> ARK
 
