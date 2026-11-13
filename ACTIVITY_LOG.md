@@ -17,3 +17,12 @@ Single-file asynchronous Python collector that reads JSONL/NDJSON, CSV and plain
 | YYYY-MM-DD | name | link | paths and source | exact command and fixture | pass / fail / not run | evidence |
 
 Record concurrency settings, queue sizes, input sizes, HTTP fixtures and memory/throughput conditions. Do not report benchmarks without reproducible methodology.
+
+## Portfolio documentation rollout — 2026-11-13
+
+- Documentation PR: https://github.com/Gitcoder12/Chaos-Control/pull/1
+- Added project-specific feature plan, company-fit mapping, two-level README guide and quality checklist.
+- Existing agent/contributor instructions were preserved or extended without replacing the repository's established policies.
+- README now includes a beginner explanation and a technical/research view tied to current scope and limitations.
+- Validation: documentation/source review only; no application runtime test or deployment is claimed by this docs PR.
+- Status: draft PR, not merged.
