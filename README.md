@@ -120,3 +120,17 @@ Apache-2.0. See [LICENSE](LICENSE).
 - [Company and team fit](COMPANY_FIT.md) · [README explanation draft](README_ADDENDUM_DRAFT.md)
 - [README quality checklist](README_QUALITY_CHECKLIST.md)
 - [Contributing](CONTRIBUTING.md) · [Agent instructions](AGENTS.md) · [Agent skills](SKILLS.md)
+
+## Understanding the project
+
+### In plain language
+
+A Python tool that reads records from several sources, converts them into one common format and lets multiple sources be read concurrently.
+
+### Technical and research view
+
+Single-file asynchronous Python collector that reads JSONL/NDJSON, CSV and plain text, recursively walks directories, and optionally streams line-oriented HTTP(S) responses using httpx. A bounded queue/semaphore provides concurrency and source errors can be isolated. It is a collector library/prototype, not a complete production data platform.
+
+Document source adapters, async generator flow, queue/semaphore limits, error policy, Record fields, HTTP line handling and resource cleanup.
+
+For future work, see [FEATURE_UPGRADE_PLAN.md](FEATURE_UPGRADE_PLAN.md), [ACTIVITY_LOG.md](ACTIVITY_LOG.md), [COMPANY_FIT.md](COMPANY_FIT.md) and [CONTRIBUTING.md](CONTRIBUTING.md).
