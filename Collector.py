@@ -30,6 +30,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, AsyncIterator, Iterable
+from urllib.parse import urlsplit
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +66,24 @@ class Record:
 # Source interface
 # ---------------------------------------------------------------------------
 
+class CollectionError(RuntimeError):
+    """A source failed; the current collection must not publish partial output."""
+
+    def __init__(self, source: str) -> None:
+        self.source = source
+        super().__init__(f"Collection failed for source: {source}")
+
+
+def _reject_json_constant(value: str) -> None:
+    """Reject JavaScript-style NaN and Infinity accepted by Python's JSON parser."""
+    raise ValueError(f"non-standard JSON constant: {value}")
+
+
+def _strict_json_loads(value: str) -> Any:
+    """Parse standards-compliant JSON and reject non-finite numeric constants."""
+    return json.loads(value, parse_constant=_reject_json_constant)
+
+
 class DataSource(ABC):
     """Base class for every source type."""
 
@@ -89,8 +108,9 @@ class FileSource(DataSource):
 
     async def stream(self) -> AsyncIterator[Record]:
         if not self.path.exists():
-            logger.error("File not found: %s", self.path)
-            return
+            raise FileNotFoundError(f"Input file does not exist: {self.path}")
+        if not self.path.is_file():
+            raise IsADirectoryError(f"Input path is not a file: {self.path}")
 
         ext = self.path.suffix.lower()
         handler = {
@@ -110,10 +130,14 @@ class FileSource(DataSource):
             if not line:
                 continue
             try:
-                obj = json.loads(line)
-            except json.JSONDecodeError as e:
+                obj = _strict_json_loads(line)
+            except (json.JSONDecodeError, ValueError, RecursionError) as e:
                 logger.warning("Malformed JSON in %s: %s", self.name, e)
-                yield Record(text="", source=self.name, metadata={"error": "malformed_json"})
+                yield Record(
+                    text="",
+                    source=self.name,
+                    metadata={"error": "malformed_json"},
+                )
                 continue
 
             yield _record_from_dict(obj, source=self.name)
@@ -155,22 +179,46 @@ class DirectorySource(DataSource):
         path: str | Path,
         pattern: str = "*",
         recursive: bool = True,
+        exclude_paths: Iterable[str | Path] = (),
+        ignore_dirs: Iterable[str] = (
+            ".git",
+            ".venv",
+            "venv",
+            "node_modules",
+            "__pycache__",
+            ".pytest_cache",
+        ),
     ) -> None:
         self.path = Path(path)
         self.pattern = pattern
         self.recursive = recursive
+        self.exclude_paths = {Path(item).resolve() for item in exclude_paths}
+        self.ignore_dirs = frozenset(ignore_dirs)
         self.name = f"dir:{self.path.name}"
 
     async def stream(self) -> AsyncIterator[Record]:
         if not self.path.exists():
-            logger.error("Directory not found: %s", self.path)
-            return
+            raise FileNotFoundError(f"Input directory does not exist: {self.path}")
+        if not self.path.is_dir():
+            raise NotADirectoryError(f"Input path is not a directory: {self.path}")
 
+        root = self.path.resolve()
         globber = self.path.rglob if self.recursive else self.path.glob
         for file_path in globber(self.pattern):
+            relative = file_path.relative_to(self.path)
+            if any(part in self.ignore_dirs for part in relative.parts):
+                continue
             if not file_path.is_file():
                 continue
-            async for record in FileSource(file_path).stream():
+            resolved = file_path.resolve()
+            try:
+                resolved.relative_to(root)
+            except ValueError:
+                logger.warning("Skipping file symlink outside input directory: %s", relative)
+                continue
+            if resolved in self.exclude_paths:
+                continue
+            async for record in FileSource(resolved).stream():
                 yield record
 
 
@@ -187,17 +235,25 @@ class HTTPSource(DataSource):
         retries: int = DEFAULT_RETRIES,
         chunk_size: int = DEFAULT_CHUNK_SIZE,
     ) -> None:
+        parsed = urlsplit(url)
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+            raise ValueError("HTTPSource requires a valid HTTP(S) URL")
+        if isinstance(retries, bool) or not isinstance(retries, int) or retries < 1:
+            raise ValueError("retries must be a positive integer")
+        if isinstance(chunk_size, bool) or not isinstance(chunk_size, int) or chunk_size < 1:
+            raise ValueError("chunk_size must be a positive integer")
         self.url = url
         self.retries = retries
         self.chunk_size = chunk_size
-        self.name = f"http:{url.split('/')[-1] or url}"
+        self.name = f"http:{parsed.hostname}{parsed.path}"
 
     async def stream(self) -> AsyncIterator[Record]:
         try:
             import httpx
-        except ImportError:
-            logger.error("httpx required for HTTPSource. Install: pip install httpx")
-            return
+        except ImportError as exc:
+            raise RuntimeError(
+                'HTTPSource requires the optional dependency; install with pip install -e ".[http]"'
+            ) from exc
 
         for attempt in range(1, self.retries + 1):
             try:
@@ -209,20 +265,35 @@ class HTTPSource(DataSource):
                             if not line:
                                 continue
                             try:
-                                obj = json.loads(line)
-                            except json.JSONDecodeError:
-                                yield Record(text=line, source=self.name, url=self.url)
+                                obj = _strict_json_loads(line)
+                            except (json.JSONDecodeError, ValueError, RecursionError) as exc:
+                                if line.lstrip().startswith(("{", "[")):
+                                    yield Record(
+                                        text="",
+                                        source=self.name,
+                                        url=self.url,
+                                        metadata={"error": "malformed_json"},
+                                    )
+                                else:
+                                    yield Record(text=line, source=self.name, url=self.url)
                                 continue
                             record = _record_from_dict(obj, source=self.name)
                             record.url = record.url or self.url
                             yield record
                 return
-            except Exception as e:
-                logger.warning("HTTP fetch failed (%d/%d): %s", attempt, self.retries, e)
+            except Exception as exc:
+                logger.warning(
+                    "HTTP fetch failed for %s (%d/%d): %s",
+                    self.name,
+                    attempt,
+                    self.retries,
+                    exc,
+                )
                 if attempt == self.retries:
-                    logger.error("Giving up on %s", self.url)
-                    return
-                await asyncio.sleep(2 ** attempt)
+                    raise RuntimeError(
+                        f"HTTP source {self.name} failed after {self.retries} attempts"
+                    ) from exc
+                await asyncio.sleep(min(2 ** attempt, 8))
 
 
 # ---------------------------------------------------------------------------
@@ -237,6 +308,10 @@ class Collector:
         max_concurrent: int = DEFAULT_MAX_CONCURRENT,
         queue_size: int = 1000,
     ) -> None:
+        if isinstance(max_concurrent, bool) or not isinstance(max_concurrent, int) or max_concurrent < 1:
+            raise ValueError("max_concurrent must be a positive integer")
+        if isinstance(queue_size, bool) or not isinstance(queue_size, int) or queue_size < 1:
+            raise ValueError("queue_size must be a positive integer")
         self.sources: list[DataSource] = []
         self.max_concurrent = max_concurrent
         self.queue_size = queue_size
@@ -255,9 +330,15 @@ class Collector:
         Stream records from all sources concurrently.
 
         Backpressure: if consumers are slow, producers pause.
-        Error isolation: one source failing does not stop others.
+        Failure integrity: a source error aborts the stream so callers cannot
+        mistake a partial collection for a successful complete dataset.
         """
-        queue: asyncio.Queue[Record | None] = asyncio.Queue(maxsize=self.queue_size)
+        if not self.sources:
+            raise ValueError("at least one data source must be registered")
+
+        queue: asyncio.Queue[Record | CollectionError | None] = asyncio.Queue(
+            maxsize=self.queue_size
+        )
         semaphore = asyncio.Semaphore(self.max_concurrent)
 
         async def produce(source: DataSource) -> None:
@@ -265,10 +346,15 @@ class Collector:
                 try:
                     async for record in source.stream():
                         await queue.put(record)
-                except Exception as e:
-                    logger.exception("Source %s failed: %s", source.name, e)
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    logger.exception("Source %s failed: %s", source.name, exc)
+                    await queue.put(CollectionError(source.name))
                 finally:
-                    await queue.put(None)  # signal done
+                    task = asyncio.current_task()
+                    if task is not None and not task.cancelling():
+                        await queue.put(None)  # signal normal completion
 
         # Start all producers
         tasks = [asyncio.create_task(produce(s)) for s in self.sources]
@@ -280,6 +366,8 @@ class Collector:
                 if item is None:
                     finished += 1
                     continue
+                if isinstance(item, CollectionError):
+                    raise item
                 yield item
         finally:
             for t in tasks:
@@ -326,19 +414,24 @@ def _record_from_dict(obj: Any, source: str) -> Record:
     if not isinstance(obj, dict):
         return Record(text=str(obj), source=source, raw={"value": obj})
 
-    text = (
-        obj.get("text")
-        or obj.get("content")
-        or obj.get("body")
-        or obj.get("document")
-        or ""
+    text = next(
+        (
+            obj.get(key)
+            for key in ("text", "content", "body", "document")
+            if obj.get(key) is not None and obj.get(key) != ""
+        ),
+        "",
     )
     url = obj.get("url")
     known = {"text", "content", "body", "document", "source", "url"}
     metadata = {k: v for k, v in obj.items() if k not in known}
 
+    if not isinstance(text, str):
+        metadata["error"] = "invalid_text_type"
+        text = ""
+
     return Record(
-        text=str(text),
+        text=text,
         source=str(obj.get("source", source)),
         url=str(url) if url else None,
         metadata=metadata,
