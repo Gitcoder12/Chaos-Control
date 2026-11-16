@@ -14,11 +14,10 @@ import re
 import sqlite3
 import tempfile
 import unicodedata
+from Collector import Record
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, AsyncIterator, Iterable
-
-from Collector import Record
 
 
 _BLOCK_TAGS = {
