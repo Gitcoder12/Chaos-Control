@@ -8,6 +8,7 @@ import json
 import os
 import sys
 import tempfile
+from contextlib import suppress
 from collections import Counter
 from pathlib import Path
 
@@ -57,7 +58,7 @@ async def _process(sources: list[str], output: Path, max_concurrent: int) -> int
         temporary_path = None
     finally:
         if temporary_path is not None:
-            with suppress_os_error():
+            with suppress(OSError):
                 temporary_path.unlink(missing_ok=True)
 
     print(f"Processed records: {total}")
@@ -66,18 +67,6 @@ async def _process(sources: list[str], output: Path, max_concurrent: int) -> int
     print(f"Quarantined: {counts['quarantined']}")
     print(f"JSONL output: {output}")
     return 0
-
-
-class suppress_os_error:
-    """Tiny context manager for best-effort temporary-file cleanup."""
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc, traceback):
-        if exc_type is not None and issubclass(exc_type, OSError):
-            return True
-        return False
 
 
 def build_parser() -> argparse.ArgumentParser:
