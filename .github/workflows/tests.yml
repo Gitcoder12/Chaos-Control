@@ -10,14 +10,21 @@ permissions:
   contents: read
 
 jobs:
-  tests:
+  quality:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Compile collector and tests
-        run: python -m compileall -q Collector.py tests
-      - name: Run unit tests
-        run: python -m unittest discover -s tests -v
+          cache: pip
+      - name: Install package and test tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+      - name: Compile source and tests
+        run: python -m compileall -q Collector.py pipeline.py chaos_control.py tests
+      - name: Run the complete test suite
+        run: pytest -q
+      - name: Verify installed command
+        run: chaos-control --help
