@@ -21,7 +21,16 @@ def test_normalize_text_extracts_visible_html_and_normalizes_unicode():
 def test_pipeline_preserves_provenance_and_raw_source_payload():
     raw = {"content": "<p>Trusted source text</p>", "author": "source-author"}
     output = asyncio.run(
-        collect([Record(text=raw["content"], source="unit-test", url="https://example.test/a", raw=raw)])
+        collect(
+            [
+                Record(
+                    text=raw["content"],
+                    source="unit-test",
+                    url="https://example.test/a",
+                    raw=raw,
+                )
+            ]
+        )
     )
 
     assert output[0]["status"] == "accepted"
