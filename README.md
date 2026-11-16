@@ -4,7 +4,7 @@
 
 Chaos-Control is a data curation pipeline for LLM training, RAG systems, knowledge bases, research datasets, and any AI workflow that needs clean data.
 
-Current release (0.2.0) provides multi-source collection plus a deterministic first curation slice. It does not yet implement the full lifecycle described in the roadmap below.
+Current release candidate (0.2.1) provides multi-source collection plus a deterministic curation slice. It does not yet implement the full lifecycle described in the roadmap below.
 
 **From chaos to control.**
 
@@ -198,7 +198,9 @@ Docker + CI, HuggingFace integration, published paper, stable API.
 
 ## Status
 
-v0.2.0 MVP (development): local/HTTP collection, deterministic text normalization, exact deduplication, required-field checks, quarantine flags, provenance-preserving JSONL output, installable CLI, and automated tests. This is not yet a production-grade full data-curation platform.
+v0.2.1 MVP (development): local/HTTP collection, deterministic text normalization, exact deduplication, required-field checks, quarantine flags, provenance-preserving JSONL output, installable CLI, explicit source-failure propagation, strict JSON constants, atomic output publication, and automated tests across supported Python versions. This is not yet a production-grade full data-curation platform.
+
+Collection behavior: missing files, invalid directories, unavailable HTTP dependencies, and exhausted HTTP retries fail the run rather than silently producing a partial dataset. The CLI writes to a temporary file and only publishes it after every source completes; prior output remains untouched after a failure.
 
 Not yet implemented: semantic/MinHash deduplication, topic classification, entity extraction/resolution, entity-level gap reports, TTL/freshness monitoring, persistent quarantine review, parallel distributed processing, cloud storage, Hugging Face integration, and 100TB-scale benchmarking. The next milestone is measured correctness and performance for the current pipeline before adding more stages.
 
