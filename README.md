@@ -1,10 +1,10 @@
 # Chaos-Control
 
-> Turn scattered data into organized knowledge. Clean, classify, detect gaps, handle volatile fields.
+> Collect and curate data streams with traceable provenance. Current MVP: normalize text, detect exact duplicates, quarantine invalid records, and export JSONL.
 
 Chaos-Control is a data curation pipeline for LLM training, RAG systems, knowledge bases, research datasets, and any AI workflow that needs clean data.
 
-Takes messy, multi-source, real-world data and produces records that are clean, structured, deduplicated, classified, entity-aware, gap-aware, freshness-aware, and traceable.
+Current release (0.2.0) provides multi-source collection plus a deterministic first curation slice. It does not yet implement the full lifecycle described in the roadmap below.
 
 **From chaos to control.**
 
@@ -12,24 +12,26 @@ Takes messy, multi-source, real-world data and produces records that are clean, 
 
 ## Why This Exists
 
-Every LLM is trained on cleaned data. Every RAG system needs clean chunks. Every AI company builds this internally. But nobody releases an open-source version that handles the full lifecycle: cleaning, organizing, gap detection, and volatile data tracking. Chaos-Control does all four. Streaming. Scales from 100MB to 100TB.
+AI and retrieval systems depend on trustworthy data preparation. Chaos-Control is being built as a composable, streaming-first open-source toolkit. The current release is deliberately narrower than the long-term vision: no 100TB scale claim, semantic deduplication, entity resolution, or automated freshness tracking is made.
 
 ---
 
-## What It Does
+## Intended lifecycle
 
-| Stage | Input | Output |
+The following is the target architecture, not a claim that every stage is implemented in v0.2.0.
+
+| Stage | Input | Target output | Current status |
 |-------|-------|--------|
-| Ingest | JSONL, CSV, TXT, HTML | Raw records |
-| Clean | Raw records | Normalized records |
-| Deduplicate | Normalized | Canonical + duplicates |
-| Classify | Clean | Topic + category |
-| Extract Entities | Text | People, orgs, products |
-| Detect Gaps | Entity records | Missing-info report |
-| Handle Volatile | Time-sensitive fields | TTL + staleness |
-| Validate | Records | Quality + security flags |
-| Quarantine | Suspicious | Isolated for review |
-| Output | All stages | JSONL + reports |
+| Ingest | Local JSONL/NDJSON, CSV, TXT, folders; HTTP(S) JSONL | Raw records | Implemented for the listed source types |
+| Clean | Raw records | Normalized records | Basic HTML/text, Unicode and whitespace normalization implemented |
+| Deduplicate | Normalized | Canonical + duplicates | Exact normalized-text deduplication implemented; semantic/MinHash planned |
+| Classify | Clean | Topic + category | Planned; not implemented |
+| Extract Entities | Text | People, orgs, products | Planned; not implemented |
+| Detect Gaps | Entity records | Missing-info report | Basic required-field quarantine only; entity-aware gap analysis planned |
+| Handle Volatile | Time-sensitive fields | TTL + staleness | Planned; not implemented |
+| Validate | Records | Quality + security flags | Basic emptiness/required-field/malformed-input flags implemented |
+| Quarantine | Suspicious | Isolated for review | Output status and reason flags implemented; persistent review queue planned |
+| Output | All stages | JSONL + reports | JSONL output implemented; aggregate quality reports planned |
 
 ---
 
@@ -112,10 +114,8 @@ Quarantine — isolate suspicious records for review, never auto-delete.
 
 ## CLI
 
-chaos-control process input.jsonl --output clean/
-chaos-control clean input.jsonl --output clean.jsonl
-chaos-control gaps clean.jsonl --output gaps.json
-chaos-control watch ./incoming --output ./cleaned
+chaos-control process input.jsonl --output curated.jsonl
+chaos-control process ./incoming --output curated.jsonl --max-concurrent 8
 
 ---
 
@@ -198,9 +198,9 @@ Docker + CI, HuggingFace integration, published paper, stable API.
 
 ## Status
 
-Pre-alpha. No working code yet.
+v0.2.0 MVP (development): local/HTTP collection, deterministic text normalization, exact deduplication, required-field checks, quarantine flags, provenance-preserving JSONL output, installable CLI, and automated tests. This is not yet a production-grade full data-curation platform.
 
-README is the map. Code is next. First milestone: v0.1 with working process command.
+Not yet implemented: semantic/MinHash deduplication, topic classification, entity extraction/resolution, entity-level gap reports, TTL/freshness monitoring, persistent quarantine review, parallel distributed processing, cloud storage, Hugging Face integration, and 100TB-scale benchmarking. The next milestone is measured correctness and performance for the current pipeline before adding more stages.
 
 ---
 
