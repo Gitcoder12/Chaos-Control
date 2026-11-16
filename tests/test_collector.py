@@ -1,4 +1,4 @@
-"""Tests for the current Chaos-Control collector foundation."""
+"""Tests for collector parsing, directory safety, and failure propagation."""
 
 import asyncio
 import json
@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from Collector import Collector, DirectorySource, FileSource
+from Collector import CollectionError, Collector, DirectorySource, FileSource
 
 
 class CollectorTests(unittest.TestCase):
@@ -58,21 +58,76 @@ class CollectorTests(unittest.TestCase):
 
             self.assertEqual(sorted(record.text for record in records), ["first", "second"])
 
-    def test_collector_merges_multiple_sources(self):
+    def test_directory_source_ignores_repository_and_virtualenv_directories(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            (root / "a.txt").write_text("alpha\n", encoding="utf-8")
-            (root / "b.txt").write_text("beta\n", encoding="utf-8")
+            (root / "real.txt").write_text("keep\n", encoding="utf-8")
+            for name in (".git", ".venv", "node_modules", "__pycache__"):
+                ignored = root / name
+                ignored.mkdir()
+                (ignored / "hidden.txt").write_text("ignore\n", encoding="utf-8")
 
             async def collect():
-                collector = Collector(max_concurrent=2)
-                collector.add(FileSource(root / "a.txt"))
-                collector.add(FileSource(root / "b.txt"))
-                return [record async for record in collector.stream()]
+                return [record async for record in DirectorySource(root).stream()]
 
             records = asyncio.run(collect())
+            self.assertEqual([record.text for record in records], ["keep"])
 
-            self.assertEqual(sorted(record.text for record in records), ["alpha", "beta"])
+    def test_directory_source_excludes_output_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source.txt"
+            output = root / "curated.jsonl"
+            temporary = root / ".curated.jsonl.tmp"
+            source.write_text("source record\n", encoding="utf-8")
+            output.write_text("old output\n", encoding="utf-8")
+            temporary.write_text("temporary output\n", encoding="utf-8")
+
+            async def collect():
+                return [
+                    record async for record in DirectorySource(
+                        root, exclude_paths=[output, temporary]
+                    ).stream()
+                ]
+
+            records = asyncio.run(collect())
+            self.assertEqual([record.text for record in records], ["source record"])
+
+    def test_missing_file_fails_instead_of_silently_returning_zero_records(self):
+        with tempfile.TemporaryDirectory() as directory:
+            missing = Path(directory) / "missing.jsonl"
+
+            async def collect():
+                return [record async for record in FileSource(missing).stream()]
+
+            with self.assertRaises(FileNotFoundError):
+                asyncio.run(collect())
+
+    def test_collector_propagates_source_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            collector = Collector(max_concurrent=2)
+            collector.add(FileSource(Path(directory) / "missing.txt"))
+
+            async def collect():
+                return [record async for record in collector.stream()]
+
+            with self.assertRaises(CollectionError):
+                asyncio.run(collect())
+
+    def test_collector_validates_resource_limits(self):
+        with self.assertRaises(ValueError):
+            Collector(max_concurrent=0)
+        with self.assertRaises(ValueError):
+            Collector(queue_size=0)
+        with self.assertRaises(ValueError):
+            Collector(max_concurrent=True)
+
+    def test_collector_requires_at_least_one_source(self):
+        async def collect():
+            return [record async for record in Collector().stream()]
+
+        with self.assertRaises(ValueError):
+            asyncio.run(collect())
 
 
 if __name__ == "__main__":
