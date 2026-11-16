@@ -75,3 +75,26 @@ def test_pipeline_can_disable_deduplication():
 
     output = asyncio.run(run())
     assert [item["status"] for item in output] == ["accepted", "accepted"]
+
+
+def test_pipeline_quarantines_non_string_text_and_malformed_metadata():
+    output = asyncio.run(
+        collect(
+            [
+                Record(text=123, source="source"),
+                Record(text="valid text", source="source", metadata=None),
+            ]
+        )
+    )
+
+    assert output[0]["status"] == "quarantined"
+    assert "invalid_text_type" in output[0]["flags"]
+    assert output[1]["status"] == "quarantined"
+    assert "invalid_metadata_type" in output[1]["flags"]
+
+
+def test_pipeline_rejects_non_boolean_deduplication_setting():
+    import pytest
+
+    with pytest.raises(ValueError, match="deduplicate"):
+        CurationPipeline(deduplicate=1)
