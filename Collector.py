@@ -148,7 +148,11 @@ class FileSource(DataSource):
             if not reader.fieldnames:
                 return
             text_col = next(
-                (c for c in reader.fieldnames if c and c.lower() in ("text", "content", "body", "document")),
+                (
+                    column
+                    for column in reader.fieldnames
+                    if column and column.lower() in ("text", "content", "body", "document")
+                ),
                 reader.fieldnames[0],
             )
             for row in reader:
@@ -266,7 +270,7 @@ class HTTPSource(DataSource):
                                 continue
                             try:
                                 obj = _strict_json_loads(line)
-                            except (json.JSONDecodeError, ValueError, RecursionError) as exc:
+                            except (json.JSONDecodeError, ValueError, RecursionError):
                                 if line.lstrip().startswith(("{", "[")):
                                     yield Record(
                                         text="",
@@ -308,9 +312,17 @@ class Collector:
         max_concurrent: int = DEFAULT_MAX_CONCURRENT,
         queue_size: int = 1000,
     ) -> None:
-        if isinstance(max_concurrent, bool) or not isinstance(max_concurrent, int) or max_concurrent < 1:
+        if (
+            isinstance(max_concurrent, bool)
+            or not isinstance(max_concurrent, int)
+            or max_concurrent < 1
+        ):
             raise ValueError("max_concurrent must be a positive integer")
-        if isinstance(queue_size, bool) or not isinstance(queue_size, int) or queue_size < 1:
+        if (
+            isinstance(queue_size, bool)
+            or not isinstance(queue_size, int)
+            or queue_size < 1
+        ):
             raise ValueError("queue_size must be a positive integer")
         self.sources: list[DataSource] = []
         self.max_concurrent = max_concurrent
