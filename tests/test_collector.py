@@ -130,5 +130,18 @@ class CollectorTests(unittest.TestCase):
             asyncio.run(collect())
 
 
+    def test_collector_single_source_completes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "one.txt"
+            path.write_text("single source\n", encoding="utf-8")
+
+            async def collect():
+                collector = Collector().add(FileSource(path))
+                return [record async for record in collector.stream()]
+
+            records = asyncio.run(collect())
+            self.assertEqual([record.text for record in records], ["single source"])
+
+
 if __name__ == "__main__":
     unittest.main()
