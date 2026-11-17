@@ -31,6 +31,6 @@ jobs:
       - name: Compile source and tests
         run: python -m compileall -q Collector.py pipeline.py chaos_control.py tests
       - name: Run the complete test suite
-        run: pytest -q
+        run: pytest -q --timeout=30
       - name: Verify installed command
         run: chaos-control --help
