@@ -153,14 +153,17 @@ class CurationPipeline:
                     identity_material = "\0".join((source, url or "", normalized))
                     record_id = hashlib.sha256(identity_material.encode("utf-8")).hexdigest()
 
-                    values: dict[str, Any] = {
+                    reserved_values = {
                         "text": normalized,
                         "source": source,
                         "url": url,
-                        **metadata,
                     }
                     for field_name in self.required_fields:
-                        value = values.get(field_name)
+                        value = (
+                            reserved_values[field_name]
+                            if field_name in reserved_values
+                            else metadata.get(field_name)
+                        )
                         if value is None or (isinstance(value, str) and not value.strip()):
                             missing.append(field_name)
 
