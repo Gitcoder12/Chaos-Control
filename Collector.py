@@ -354,19 +354,19 @@ class Collector:
         semaphore = asyncio.Semaphore(self.max_concurrent)
 
         async def produce(source: DataSource) -> None:
-            async with semaphore:
-                try:
+            try:
+                async with semaphore:
                     async for record in source.stream():
                         await queue.put(record)
-                except asyncio.CancelledError:
-                    raise
-                except Exception as exc:
-                    logger.exception("Source %s failed: %s", source.name, exc)
-                    await queue.put(CollectionError(source.name))
-                finally:
-                    task = asyncio.current_task()
-                    if task is not None and not task.cancelling():
-                        await queue.put(None)  # signal normal completion
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                logger.exception("Source %s failed: %s", source.name, exc)
+                await queue.put(CollectionError(source.name))
+
+            # The sentinel is emitted after normal completion or after the
+            # error event. Cancellation deliberately skips this line.
+            await queue.put(None)
 
         # Start all producers
         tasks = [asyncio.create_task(produce(s)) for s in self.sources]
