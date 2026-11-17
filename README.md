@@ -240,3 +240,21 @@ This section supplements the maintainer-authored README above. The original text
 - Preserve existing real and maintainer-provided data. Never silently substitute generated or placeholder records. Mark unverified sources and metrics as unknown/unverified.
 - Verify installation, execution, tests and public claims against the exact current commit before presenting this project to recruiters, researchers or professors.
 - See [MODEL_AUDIT_ROUTER.md](MODEL_AUDIT_ROUTER.md) for independent model review instructions and the merge gate.
+
+---
+
+## Engineering Audit & Handover — 2026-11-17
+
+**Reviewed commit:** `62e67763c4ba772f7c593b10828d8e6c46114513` (`main`). Static inspection covered `Collector.py`, `pipeline.py`, and current collector/pipeline tests; tests were not executed.
+
+### Confirmed findings
+- The current pipeline explicitly implements text normalization, exact deduplication, required-field checks, quarantine flags, and provenance-preserving output. Its module documentation explicitly excludes semantic deduplication, entity extraction, topic inference, freshness prediction, and distributed scale.
+- Existing tests cover representative file collection, normalization, provenance, exact duplicates, quarantine, and disabling deduplication. They do not establish arbitrary-scale performance or production reliability.
+- The collector's broad “Any size. Any location.” wording should be treated as an aspiration, not a verified capacity guarantee.
+
+### Next actions
+1. Keep implemented and planned pipeline stages clearly separated in product claims.
+2. Add adversarial tests for malformed/huge records, HTTP timeouts/retries, cancellation, temporary SQLite cleanup, and disk exhaustion.
+3. Benchmark throughput and memory on documented hardware/dataset sizes before publishing scale claims.
+
+**Verification status:** static source/test inspection only; no test suite or load benchmark was run in this audit.
