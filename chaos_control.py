@@ -6,6 +6,7 @@ import argparse
 import asyncio
 import json
 import os
+import sqlite3
 import sys
 import tempfile
 from collections import Counter
@@ -93,7 +94,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "process":
         try:
             return asyncio.run(_process(args.sources, args.output, args.max_concurrent))
-        except (OSError, ValueError, TypeError, RuntimeError) as exc:
+        except (OSError, ValueError, TypeError, RuntimeError, sqlite3.Error) as exc:
             print(f"chaos-control: {exc}", file=sys.stderr)
             return 2
     parser.error("unsupported command")
