@@ -14,7 +14,6 @@ import re
 import sqlite3
 import tempfile
 import unicodedata
-from contextlib import suppress
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, AsyncIterator, Iterable
@@ -94,6 +93,8 @@ class CurationPipeline:
         self.required_fields = tuple(required_fields)
         if any(not isinstance(name, str) or not name.strip() for name in self.required_fields):
             raise ValueError("required_fields must contain non-empty field names")
+        if not isinstance(deduplicate, bool):
+            raise ValueError("deduplicate must be a boolean")
         self.deduplicate = deduplicate
 
     async def process(self, records: AsyncIterator[Record]) -> AsyncIterator[dict[str, Any]]:
@@ -116,25 +117,53 @@ class CurationPipeline:
                         }
                         continue
 
-                    normalized = normalize_text(record.text)
-                    source = record.source.strip() if isinstance(record.source, str) else ""
-                    url = record.url.strip() if isinstance(record.url, str) and record.url.strip() else None
-                    metadata = dict(record.metadata)
-                    raw = record.raw if isinstance(record.raw, dict) else {}
-
-                    identity_material = "\0".join((source, url or "", normalized))
-                    record_id = hashlib.sha256(identity_material.encode("utf-8")).hexdigest()
                     flags: list[str] = []
                     missing: list[str] = []
 
-                    values: dict[str, Any] = {
+                    if isinstance(record.text, str):
+                        normalized = normalize_text(record.text)
+                    else:
+                        normalized = ""
+                        flags.append("invalid_text_type")
+
+                    source = record.source.strip() if isinstance(record.source, str) else ""
+                    if not isinstance(record.source, str):
+                        flags.append("invalid_source_type")
+
+                    if record.url is None:
+                        url = None
+                    elif isinstance(record.url, str):
+                        url = record.url.strip() or None
+                    else:
+                        url = None
+                        flags.append("invalid_url_type")
+
+                    if isinstance(record.metadata, dict):
+                        metadata = record.metadata
+                    else:
+                        metadata = {}
+                        flags.append("invalid_metadata_type")
+
+                    if isinstance(record.raw, dict):
+                        raw = record.raw
+                    else:
+                        raw = {}
+                        flags.append("invalid_raw_type")
+
+                    identity_material = "\0".join((source, url or "", normalized))
+                    record_id = hashlib.sha256(identity_material.encode("utf-8")).hexdigest()
+
+                    reserved_values = {
                         "text": normalized,
                         "source": source,
                         "url": url,
-                        **metadata,
                     }
                     for field_name in self.required_fields:
-                        value = values.get(field_name)
+                        value = (
+                            reserved_values[field_name]
+                            if field_name in reserved_values
+                            else metadata.get(field_name)
+                        )
                         if value is None or (isinstance(value, str) and not value.strip()):
                             missing.append(field_name)
 
@@ -144,10 +173,21 @@ class CurationPipeline:
                         flags.append("missing_required_fields")
                     if metadata.get("error") == "malformed_json":
                         flags.append("malformed_json")
+                    if metadata.get("error") == "invalid_text_type":
+                        flags.append("invalid_text_type")
 
                     status = "accepted"
                     duplicate_of: str | None = None
-                    if not normalized or missing or "malformed_json" in flags:
+                    quarantine_flags = {
+                        "empty_after_cleaning",
+                        "invalid_text_type",
+                        "invalid_source_type",
+                        "invalid_url_type",
+                        "invalid_metadata_type",
+                        "invalid_raw_type",
+                        "malformed_json",
+                    }
+                    if not normalized or missing or quarantine_flags.intersection(flags):
                         status = "quarantined"
                     elif self.deduplicate:
                         fingerprint = hashlib.sha256(normalized.encode("utf-8")).hexdigest()

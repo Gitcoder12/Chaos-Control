@@ -6,33 +6,34 @@ import argparse
 import asyncio
 import json
 import os
+import sqlite3
 import sys
 import tempfile
-from contextlib import suppress
 from collections import Counter
+from contextlib import suppress
 from pathlib import Path
+from typing import Iterable
 
 from Collector import Collector, DirectorySource, FileSource, HTTPSource
 from pipeline import CurationPipeline
 
 
-def _source_for(value: str):
+def _source_for(value: str, exclude_paths: Iterable[Path] = ()):
     if value.startswith(("http://", "https://")):
         return HTTPSource(value)
     path = Path(value)
     if path.is_dir():
-        return DirectorySource(path)
+        return DirectorySource(path, exclude_paths=exclude_paths)
     return FileSource(path)
 
 
 async def _process(sources: list[str], output: Path, max_concurrent: int) -> int:
-    if max_concurrent < 1:
+    if isinstance(max_concurrent, bool) or max_concurrent < 1:
         raise ValueError("max_concurrent must be at least 1")
+    if output.exists() and output.is_dir():
+        raise IsADirectoryError(f"output path is a directory: {output}")
 
-    collector = Collector(max_concurrent=max_concurrent)
-    for source in sources:
-        collector.add(_source_for(source))
-
+    output = output.resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
     counts: Counter[str] = Counter()
     total = 0
@@ -49,6 +50,11 @@ async def _process(sources: list[str], output: Path, max_concurrent: int) -> int
             delete=False,
         ) as handle:
             temporary_path = Path(handle.name)
+            collector = Collector(max_concurrent=max_concurrent)
+            excluded_paths = (output, temporary_path.resolve())
+            for source in sources:
+                collector.add(_source_for(source, exclude_paths=excluded_paths))
+
             async for item in CurationPipeline().process(collector.stream()):
                 handle.write(json.dumps(item, ensure_ascii=False, allow_nan=False) + "\n")
                 counts[item["status"]] += 1
@@ -88,7 +94,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "process":
         try:
             return asyncio.run(_process(args.sources, args.output, args.max_concurrent))
-        except (OSError, ValueError, TypeError) as exc:
+        except (OSError, ValueError, TypeError, RuntimeError, sqlite3.Error) as exc:
             print(f"chaos-control: {exc}", file=sys.stderr)
             return 2
     parser.error("unsupported command")

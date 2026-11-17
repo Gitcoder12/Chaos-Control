@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "chaos-control"
-version = "0.2.0"
+version = "0.2.1"
 description = "Streaming data collection and deterministic dataset curation tools"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -14,7 +14,7 @@ dependencies = []
 
 [project.optional-dependencies]
 http = ["httpx>=0.27"]
-dev = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "pytest-timeout>=2.3", "ruff>=0.6"]
 
 [project.scripts]
 chaos-control = "chaos_control:main"
@@ -25,3 +25,16 @@ py-modules = ["Collector", "pipeline", "chaos_control"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["Collector", "pipeline", "chaos_control"]
+
+[tool.ruff.lint.per-file-ignores]
+# "Collector" is the legacy capitalized module name retained for compatibility.
+"pipeline.py" = ["I001"]

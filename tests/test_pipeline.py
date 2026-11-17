@@ -21,7 +21,16 @@ def test_normalize_text_extracts_visible_html_and_normalizes_unicode():
 def test_pipeline_preserves_provenance_and_raw_source_payload():
     raw = {"content": "<p>Trusted source text</p>", "author": "source-author"}
     output = asyncio.run(
-        collect([Record(text=raw["content"], source="unit-test", url="https://example.test/a", raw=raw)])
+        collect(
+            [
+                Record(
+                    text=raw["content"],
+                    source="unit-test",
+                    url="https://example.test/a",
+                    raw=raw,
+                )
+            ]
+        )
     )
 
     assert output[0]["status"] == "accepted"
@@ -75,3 +84,40 @@ def test_pipeline_can_disable_deduplication():
 
     output = asyncio.run(run())
     assert [item["status"] for item in output] == ["accepted", "accepted"]
+
+
+def test_pipeline_quarantines_non_string_text_and_malformed_metadata():
+    output = asyncio.run(
+        collect(
+            [
+                Record(text=123, source="source"),
+                Record(text="valid text", source="source", metadata=None),
+            ]
+        )
+    )
+
+    assert output[0]["status"] == "quarantined"
+    assert "invalid_text_type" in output[0]["flags"]
+    assert output[1]["status"] == "quarantined"
+    assert "invalid_metadata_type" in output[1]["flags"]
+
+
+def test_pipeline_rejects_non_boolean_deduplication_setting():
+    import pytest
+
+    with pytest.raises(ValueError, match="deduplicate"):
+        CurationPipeline(deduplicate=1)
+
+
+
+def test_metadata_cannot_spoof_reserved_required_source_field():
+    item = Record(
+        text="Valid source text",
+        source="",
+        metadata={"source": "forged-metadata-source"},
+    )
+    output = asyncio.run(collect([item]))
+
+    assert output[0]["status"] == "quarantined"
+    assert output[0]["source"] == ""
+    assert output[0]["missing_fields"] == ["source"]
