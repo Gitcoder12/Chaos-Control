@@ -145,3 +145,19 @@ class CollectorTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+
+class StrictJsonParsingTests(unittest.TestCase):
+    def test_rejects_numeric_exponents_that_overflow_to_infinity(self):
+        from Collector import _strict_json_loads
+
+        for value in ("1e999", "-1e999"):
+            with self.subTest(value=value):
+                with self.assertRaises(ValueError):
+                    _strict_json_loads(value)
+
+    def test_accepts_finite_exponent_values(self):
+        from Collector import _strict_json_loads
+
+        self.assertEqual(_strict_json_loads("1.25e2"), 125.0)
