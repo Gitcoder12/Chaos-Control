@@ -107,3 +107,17 @@ def test_pipeline_rejects_non_boolean_deduplication_setting():
 
     with pytest.raises(ValueError, match="deduplicate"):
         CurationPipeline(deduplicate=1)
+
+
+
+def test_metadata_cannot_spoof_reserved_required_source_field():
+    item = Record(
+        text="Valid source text",
+        source="",
+        metadata={"source": "forged-metadata-source"},
+    )
+    output = asyncio.run(collect([item]))
+
+    assert output[0]["status"] == "quarantined"
+    assert output[0]["source"] == ""
+    assert output[0]["missing_fields"] == ["source"]
