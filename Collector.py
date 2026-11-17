@@ -26,6 +26,7 @@ import asyncio
 import csv
 import json
 import logging
+import math
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -79,9 +80,21 @@ def _reject_json_constant(value: str) -> None:
     raise ValueError(f"non-standard JSON constant: {value}")
 
 
+def _strict_json_float(value: str) -> float:
+    """Reject valid-looking JSON exponents that overflow to infinity."""
+    parsed = float(value)
+    if not math.isfinite(parsed):
+        raise ValueError("non-finite JSON number")
+    return parsed
+
+
 def _strict_json_loads(value: str) -> Any:
     """Parse standards-compliant JSON and reject non-finite numeric constants."""
-    return json.loads(value, parse_constant=_reject_json_constant)
+    return json.loads(
+        value,
+        parse_constant=_reject_json_constant,
+        parse_float=_strict_json_float,
+    )
 
 
 class DataSource(ABC):
@@ -285,19 +298,22 @@ class HTTPSource(DataSource):
                             record.url = record.url or self.url
                             yield record
                 return
-            except Exception as exc:
+            except asyncio.CancelledError:
+                raise
+            except httpx.HTTPError as exc:
                 logger.warning(
                     "HTTP fetch failed for %s (%d/%d): %s",
                     self.name,
                     attempt,
                     self.retries,
-                    exc,
+                    type(exc).__name__,
                 )
                 if attempt == self.retries:
                     raise RuntimeError(
                         f"HTTP source {self.name} failed after {self.retries} attempts"
                     ) from exc
                 await asyncio.sleep(min(2 ** attempt, 8))
+
 
 
 # ---------------------------------------------------------------------------
