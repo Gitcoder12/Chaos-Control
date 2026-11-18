@@ -260,3 +260,26 @@ This section supplements the maintainer-authored README above. The original text
 3. Benchmark throughput and memory on documented hardware/dataset sizes before publishing scale claims.
 
 **Verification status:** static source/test inspection only; no test suite or load benchmark was run in this audit.
+
+
+---
+
+## Branch Activity & Development History
+
+**Audit date:** 2026-11-18 · **Comparison base:** `main`
+
+| Branch | Difference from `main` | Observed work / changed paths |
+|---|---:|---|
+| `docs/portfolio-operating-kit-2026-11-13` | 5 ahead / 13 behind | Activity log, agent guidance, worklog, company-fit notes, contributor guide, feature plan and README support docs |
+| `docs/project-status-2026-11-16-chaos-control` | 1 / 11 | Project status snapshot: `PROJECT_STATUS.md` |
+| `feat/deterministic-curation-mvp` | 0 / 3 | No unique commits relative to current `main`; branch is behind |
+| `fix/collector-failure-integrity` | 24 / 2 | Collector/pipeline failure handling, CLI, workflow configuration and collector/pipeline tests |
+
+### Open pull requests observed during this audit
+
+- [PR #2 — project status snapshot](https://github.com/Gitcoder12/Chaos-Control/pull/2)
+- [PR #1 — project handbook and async collector roadmap](https://github.com/Gitcoder12/Chaos-Control/pull/1)
+
+**Review note:** The collector-integrity branch has substantial code and test changes, but the comparison does not establish that tests pass. Verify CI and failure-path behavior on the exact PR head before merging. No branch has been merged or deleted as part of this documentation work.
+
+**Verification boundary:** This is a Git metadata and changed-path audit, not a correctness or security certification.
