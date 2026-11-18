@@ -260,3 +260,10 @@ This section supplements the maintainer-authored README above. The original text
 3. Benchmark throughput and memory on documented hardware/dataset sizes before publishing scale claims.
 
 **Verification status:** static source/test inspection only; no test suite or load benchmark was run in this audit.
+
+---
+
+## Examples Used
+- Cleaning duplicate records collected from multiple sources
+- Quarantining malformed or empty documents
+- Preserving source provenance when conflicting claims appear
