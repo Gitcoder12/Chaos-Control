@@ -267,3 +267,27 @@ This section supplements the maintainer-authored README above. The original text
 - Cleaning duplicate records collected from multiple sources
 - Quarantining malformed or empty documents
 - Preserving source provenance when conflicting claims appear
+
+
+---
+
+## Comparison with Existing Open-Source Projects
+
+Chaos-Control is documented as a provenance-aware data-curation pipeline for LLM/RAG datasets, with a deliberately narrow current release: ingestion, normalization, exact deduplication, validation/quarantine and JSONL output. These projects provide adjacent data-quality and deduplication references.
+
+| Project | Established focus | Relationship to Chaos-Control |
+|---|---|---|
+| [Great Expectations](https://github.com/great-expectations/great_expectations) | Data validation and quality expectations across data pipelines | A broader data-quality framework; Chaos-Control's stated distinction is a composable text/record curation pipeline with explicit quarantine and source provenance. |
+| [Cleanlab](https://github.com/cleanlab/cleanlab) | Finding data and label quality issues, especially in ML datasets | More focused on statistical data/label issue detection; Chaos-Control currently performs deterministic normalization and structural checks rather than learned quality estimation. |
+| [datasketch](https://github.com/ekzhu/datasketch) | Probabilistic data structures including MinHash and locality-sensitive hashing | Relevant to the planned near-duplicate stage; Chaos-Control currently documents exact normalized-text deduplication, not semantic or MinHash deduplication. |
+
+### Where Chaos-Control is different
+- **Explicit quarantine workflow:** invalid or insufficiently structured records can be retained with reasons instead of silently discarded.
+- **Provenance-oriented design:** source and retrieval metadata are part of the intended record lifecycle.
+- **Narrow deterministic MVP:** the current implementation avoids claiming large-scale semantic classification, entity resolution or freshness automation before those stages exist.
+
+### Where established projects are stronger
+Great Expectations and Cleanlab have much broader data-quality ecosystems and integrations. datasketch provides specialized similarity primitives. Chaos-Control's README explicitly marks several stages—classification, entity extraction, semantic deduplication and volatile-field tracking—as planned or partial.
+
+### Evidence and limitations
+Measure throughput and memory on reproducible datasets; test schema drift, malformed records, Unicode normalization, duplicate edge cases and provenance preservation. Keep the current release scope distinct from the target architecture. This is a capability-scope comparison, not a scale or quality benchmark.
